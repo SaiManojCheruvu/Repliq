@@ -1,0 +1,23 @@
+# Install Python 3.12 if not already present (Fedora)
+sudo dnf install python3.12 python3.12-venv -y
+
+# Create a venv with 3.12
+cd ~/Repliq/be
+python3.12 -m venv venv
+
+# Activate it
+source venv/bin/activate
+
+# Confirm you're on 3.12
+python --version   # should say Python 3.12.x
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run tests
+python -m pytest tests/test_kb_pipeline.py -v
+
+
+
+
+source ~/Repliq/be/venv/bin/activate

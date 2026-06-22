@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from jose import jwt
-from datetime import datetime, timedelta
 import bcrypt
 import os
+from datetime import datetime, timedelta, timezone
 
 from database import get_db
 from models import User, Business
@@ -30,7 +31,7 @@ def create_token(email: str, business_id: str) -> str:
     payload = {
         "sub": email,
         "business_id": business_id,
-        "exp": datetime.utcnow() + timedelta(hours=EXPIRE_HOURS)
+        "exp": datetime.now(timezone.utc) + timedelta(hours=EXPIRE_HOURS)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHM)
 
@@ -62,6 +63,28 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
     logger.info("User registered successfully: %s | business: %s", body.email, business.id)
     token = create_token(user.email, business.id)
     return AuthResponse(token=token, business_id=business.id, email=body.email)
+
+
+_bearer = HTTPBearer()
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Security(_bearer),
+    db: Session = Depends(get_db),
+) -> User:
+    """FastAPI dependency: decode JWT and return the authenticated User."""
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
 
 
 @router.post("/login", response_model=AuthResponse)
